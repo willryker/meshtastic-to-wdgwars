@@ -1,0 +1,12 @@
+.venv/
+*.pyc
+__pycache__/
+# Node dumps. These carry POSITIONS for every node the radio has heard, which
+# is other people's location data as well as the local node. Never commit one.
+# The pattern is deliberately broad: meshchat-nodes.json was listed and
+# serial-nodes.json was not, so a 144-node dump with coordinates would have
+# gone in.
+nodes.json
+*-nodes.json
+*nodes*.json
+*.pre-*

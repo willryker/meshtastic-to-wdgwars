@@ -1,0 +1,1 @@
+meshtastic>=2.7  # serial reader only; convert and upload are stdlib
