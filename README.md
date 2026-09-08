@@ -101,3 +101,7 @@ the upload set. Do not add a fallback that fills a missing position from
 `--key`, then `$WDGWARS_API_KEY`, then `~/.wdgwars/api_key`. The key stays on
 whatever machine runs the upload, which is why the reader and the uploader are
 separate: nab9 reads the radio, it never needs the credential.
+
+## Licence
+
+MIT. See `LICENSE`.
