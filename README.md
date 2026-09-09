@@ -7,17 +7,24 @@ this fills it with `network: "meshtastic"`.
 
 Stdlib only, except the serial reader.
 
-## Two readers, one converter
+## Three readers, one converter
 
 Reading needs hardware. Everything after it runs against a saved dump, so a
 capture can be re-converted and re-uploaded without the radio.
 
 ```bash
-# on nab9, no downtime, reads meshchat's database read-only
+# the Meshtastic iOS app's own backup store, richest of the three
+./read_ios_backup.py > ios-nodes.json
+
+# a meshchat database, read-only, no downtime
 python3 dump_meshchat.py > nodes.json
 
 # or from the radio directly, which needs the serial port free
 ./ratatoskr.py --dump nodes.json
+
+# several dumps merge; the freshest sighting wins and roles/rssi/hops
+# are filled from whichever capture actually has them
+./ratatoskr.py ios-nodes.json nodes.json --preview
 
 # then, anywhere the API key lives
 ./ratatoskr.py nodes.json --preview
@@ -36,7 +43,7 @@ or timeout error while it is up. Stop the stack first, or use
 The board is pinned to `/dev/meshtastic` by a udev rule. `--dump` prefers that
 name and only falls back to autodetection. Never pass `/dev/ttyACM0`, it moves.
 
-## What the two sources differ on
+## What the sources differ on
 
 | | serial | meshchat.db |
 |---|---|---|
@@ -105,3 +112,48 @@ separate: nab9 reads the radio, it never needs the credential.
 ## Licence
 
 MIT. See `LICENSE`.
+
+## The iOS app backup
+
+The Meshtastic iOS app writes a CoreData/SwiftData SQLite database per
+connected node into iCloud Drive, at
+`~/Library/Mobile Documents/com~apple~CloudDocs/Meshtastic/<nodeNum>/Meshtastic.store`,
+indexed by `backup-index.json`. `read_ios_backup.py` reads every store it finds,
+read-only through a `file:...?mode=ro` URI, and merges them.
+
+It is the best of the three sources. It carries an explicit **`ZVIAMQTT`** flag
+per node, so MQTT provenance is *stated* rather than inferred from a missing
+SNR, plus a real first-heard timestamp and position history (`ZLATEST = 1` is
+current).
+
+Do not bother with the app's "Application Logs" CSV export. Measured on a
+442-line export: one position-bearing line shape, two instances, and no SNR
+field anywhere, so nothing from it can satisfy the provenance gate.
+
+Two traps, both silent:
+
+- **Timestamps are Apple epoch (2001-01-01), not unix.** Read raw they land in
+  1995 and fail every plausibility floor. Add `978307200`.
+- **`ZROLE` is an integer**, on the `ZUSERENTITY` row rather than the node row,
+  and an unrecognised value is left absent rather than guessed.
+
+## Provenance: only what your own antenna heard
+
+A node is uploaded only when this capture can show your radio measured a packet
+from it. Two rules do that, and neither is optional:
+
+- **No SNR, no upload** (`no_rf_measurement`). A node heard over the air has an
+  SNR; one handed to you over the internet does not. A relayed packet still
+  counts, your antenna did receive it, and the hop count rides along in
+  `path_hops` so the server can discount it.
+- **`viaMqtt` is rejected outright**, whatever SNR sits beside it.
+
+`--allow-no-rf` waives the first. It exists for completeness and should stay
+unused: uploading nodes you never heard turns your feed into a copy of the
+public map.
+
+## Never upload your own devices
+
+See `own-nodes.example.txt`. Copy it to `own-nodes.txt`, which is gitignored and
+read automatically. This is the one gate that is a privacy decision rather than
+a data-quality one, so it lives in a list you control.

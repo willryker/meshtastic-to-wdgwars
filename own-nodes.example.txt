@@ -1,0 +1,26 @@
+# Copy to own-nodes.txt. Read by default when present; nothing else is needed.
+#
+# Node ids listed here are NEVER uploaded, whatever the mesh heard.
+#
+# WHY THIS EXISTS. Every other gate in the feeder is about data quality: a real
+# GPS fix, a plausible timestamp, an SNR proving your antenna actually heard the
+# packet. A device you own and carry passes all of them. It reports a real fix,
+# it is heard direct at hops=0, and it goes up named, under your own player
+# account, tying a name to a place.
+#
+# A "the local node has no position" convention does not cover it either. That
+# works only for a fixed gateway you deliberately gave no GPS. Anything with a
+# battery and a GPS has one.
+#
+# WHAT IT ACTUALLY PROTECTS is the name-to-place link, not the coordinate. On a
+# channel with positionPrecision set, positions quantise onto a grid a couple of
+# km across and are usually already public from unrelated nodes. The disclosure
+# is "this id belongs to me", not "something is at these coordinates".
+#
+# CHECK EVERY NEW CAPTURE for nodes very close to you at hops=0, and add them
+# here rather than remembering them. Catching one by eye is not a control.
+#
+# One node id per line, 8 lowercase hex, no leading "!". '#' starts a comment.
+
+# aabbccdd   # "phone",  carried
+# 11223344   # "base",   at home

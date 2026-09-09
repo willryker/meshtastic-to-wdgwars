@@ -343,6 +343,12 @@ def _has_rf(entry: dict) -> bool:
     the antenna genuinely received it, and WDGWars accepts hopped sightings
     explicitly, trusting them less for position via `path_hops`.
     """
+    if entry.get("viaMqtt"):
+        # Stated by the source rather than inferred. The iOS backup carries
+        # ZVIAMQTT per node; when it says the packet came over MQTT the node
+        # was heard by the internet, not by an antenna, and no SNR sitting
+        # beside it changes that.
+        return False
     return entry.get("snr") not in (None, 0)
 
 
@@ -447,6 +453,18 @@ def main(argv: list[str] | None = None) -> int:
                         "`network` is the authoritative field; this is the "
                         "one part of the contract not yet confirmed, which "
                         "is what --probe is for.")
+    p.add_argument("--exclude-file", metavar="FILE",
+                   help="file of node_ids never to upload, one per line, '#' "
+                        "comments allowed. Defaults to own-nodes.txt beside "
+                        "this script when it exists, so the safe behaviour is "
+                        "automatic rather than remembered.")
+    p.add_argument("--no-exclude-file", action="store_true",
+                   help="ignore the default exclusion file")
+    p.add_argument("--exclude", action="append", default=[], metavar="NODE_ID",
+                   help="hold a node back from the upload. Repeatable. For "
+                        "nodes you do not want published under your own "
+                        "account regardless of what the mesh heard, e.g. a "
+                        "device you carry that reports a real GPS fix.")
     p.add_argument("--allow-no-rf", action="store_true",
                    help="upload nodes our radio never measured (no SNR). "
                         "These are typically MQTT-injected, i.e. heard by "
@@ -487,6 +505,22 @@ def main(argv: list[str] | None = None) -> int:
         total += len(dump.get("nodes") or {})
         drop.update(d)
     records, mstats = merge_records(sets)
+    # The standing list is applied unless explicitly waived. Catching a personal
+    # device by eye worked twice and is not a control; a file is.
+    ex_path = args.exclude_file or (pathlib.Path(__file__).parent / "own-nodes.txt")
+    if not args.no_exclude_file and pathlib.Path(ex_path).is_file():
+        for line in pathlib.Path(ex_path).read_text().splitlines():
+            tok = line.split("#", 1)[0].strip()
+            if tok:
+                args.exclude.append(tok)
+    if args.exclude:
+        held = {e.lower().lstrip("!") for e in args.exclude}
+        kept = [r for r in records if r["node_id"] not in held]
+        for r in records:
+            if r["node_id"] in held:
+                print(f"HELD BACK    : {r['node_id']} {r['name']!r} "
+                      f"at {r['lat']},{r['lon']}")
+        records = kept
     if len(sets) > 1:
         print(f"merge        : {dict(mstats)}")
 

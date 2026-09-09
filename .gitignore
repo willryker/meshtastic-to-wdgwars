@@ -10,3 +10,11 @@ nodes.json
 *-nodes.json
 *nodes*.json
 *.pre-*
+
+# The real exclusion list names the OWNER'S OWN devices, and this repo is
+# public. Node ids are broadcast on the air, so they are not secret in
+# themselves, but a file saying "this id is carried by me and this one is at my
+# house" is the name-to-place link the list exists to prevent. Ship the example,
+# keep yours local. own-nodes.example.txt documents the format.
+own-nodes.txt
+fresh-ids.json
