@@ -6,9 +6,16 @@ __pycache__/
 # The pattern is deliberately broad: meshchat-nodes.json was listed and
 # serial-nodes.json was not, so a 144-node dump with coordinates would have
 # gone in.
-nodes.json
-*-nodes.json
-*nodes*.json
+#
+# THIS IS THE THIRD MISS, SO THE RULE IS NO LONGER BY NAME. meshchat-nodes.json
+# was listed and serial-nodes.json was not; then ios-fresh.json matched none of
+# the "nodes" patterns at all and a git add -A committed a 3,172-node capture
+# with 155 positions in it. A dump is whatever the next person names it, so
+# matching names will keep losing.
+#
+# Every .json is ignored. Nothing in this repo needs to be tracked as JSON; if
+# something ever does, whitelist it here by name with a "!" line and say why.
+*.json
 *.pre-*
 
 # The real exclusion list names the OWNER'S OWN devices, and this repo is

@@ -105,7 +105,14 @@ def main(argv):
     if not argv:
         base = pathlib.Path.home() / ("Library/Mobile Documents/"
                                       "com~apple~CloudDocs/Meshtastic")
-        argv = [str(p) for p in sorted(base.glob("*/Meshtastic.store"))]
+        # rglob, not glob: the app moved its backups from <nodeNum>/ at the top
+        # level to NodeBackups/<deviceId>/ (index version 2), because a node
+        # number changes on the 2.8 firmware upgrade and every renumber orphaned
+        # the previous backup. A top-level glob silently finds only the OLD
+        # directories and reports a stale capture as a successful read, which is
+        # exactly what it did on 2026-09-13. Recursing covers both layouts, and
+        # node identity comes from inside each store, never from the path.
+        argv = [str(p) for p in sorted(base.rglob("Meshtastic.store"))]
         if not argv:
             raise SystemExit(f"no Meshtastic.store found under {base}")
     merged, seen = {}, {}
