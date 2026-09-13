@@ -63,6 +63,10 @@ NODE_ID_GATE = re.compile(r"^[0-9a-f]{8,16}$")
 # rejecting.
 DEFAULT_ROLE = "CLIENT"
 
+# How many records --preview prints. Anything beyond is reported as a count,
+# never dropped in silence.
+PREVIEW_LIMIT = 6
+
 
 # ---------------------------------------------------------------------------
 # Reading the radio (the only part that needs the meshtastic package)
@@ -566,7 +570,14 @@ def main(argv: list[str] | None = None) -> int:
         print("nothing to send.")
         return 1
     if args.preview:
-        print(json.dumps(records[:6], indent=1))
+        # Capped so a large capture stays readable, but NEVER silently: the
+        # preview is the last look before publishing to a public game, and a
+        # truncation with nothing said is the one thing it must not do.
+        print(json.dumps(records[:PREVIEW_LIMIT], indent=1))
+        if len(records) > PREVIEW_LIMIT:
+            print(f"... {len(records) - PREVIEW_LIMIT} more record(s) not shown. "
+                  f"ALL {len(records)} would be uploaded. "
+                  f"Use --dry-run for the signed count, or jq for the full set.")
         return 0
 
     api_key = load_key(args.key)
