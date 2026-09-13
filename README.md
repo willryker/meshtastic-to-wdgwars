@@ -7,7 +7,7 @@ this fills it with `network: "meshtastic"`.
 
 Stdlib only, except the serial reader.
 
-## Three readers, one converter
+## Four readers, one converter
 
 Reading needs hardware. Everything after it runs against a saved dump, so a
 capture can be re-converted and re-uploaded without the radio.
@@ -21,6 +21,10 @@ python3 dump_meshchat.py > nodes.json
 
 # or from the radio directly, which needs the serial port free
 ./ratatoskr.py --dump nodes.json
+
+# a node with no reachable serial port, over its API on :4403. That is a
+# LOCAL connection and needs no admin key, unlike remote admin over LoRa.
+./ratatoskr.py --dump roof.json --host <node-ip>
 
 # several dumps merge; the freshest sighting wins and roles/rssi/hops
 # are filled from whichever capture actually has them
@@ -51,6 +55,14 @@ name and only falls back to autodetection. Never pass `/dev/ttyACM0`, it moves.
 | coordinates | int32 scaled 1e7 | already decimal degrees |
 | rssi | per node, when heard directly | recovered from the `messages` table |
 | downtime | stop meshchat first | none |
+
+A TCP read returns the same protobuf nodedb as a serial one, roles included.
+Two things to know: the node drops the socket as it disconnects, so `close()`
+raises `BrokenPipeError` after the nodedb is already in hand (swallowed, it is
+not a failed read); and the read prints `[OK] read N nodes` whichever node
+answered, so **confirm which one you got from `my_node_num` in the dump**, never
+from the node count. Both radios here report exactly 250, which is the firmware
+nodedb cap rather than a coincidence.
 
 `roles_available` in the dump tells the converter which case it is. On a
 serial read an absent role decodes as `CLIENT`, because protobuf3 omits a
@@ -148,6 +160,11 @@ from it. Two rules do that, and neither is optional:
   `path_hops` so the server can discount it.
 - **`viaMqtt` is rejected outright**, whatever SNR sits beside it.
 
+Most of a handheld's nodedb does not survive this, and that is the gate
+working. Measured 2026-09-13: of 250 entries, **245 were `viaMqtt`** and only 3
+carried an SNR at all. A capture that converts to almost nothing is the expected
+shape, not a broken read.
+
 `--allow-no-rf` waives the first. It exists for completeness and should stay
 unused: uploading nodes you never heard turns your feed into a copy of the
 public map.
@@ -155,5 +172,15 @@ public map.
 ## Never upload your own devices
 
 See `own-nodes.example.txt`. Copy it to `own-nodes.txt`, which is gitignored and
-read automatically. This is the one gate that is a privacy decision rather than
+read automatically.
+
+**The `no_gps` drop only protects the node you are reading.** A node that carries
+no position is dropped when you read its own radio, but every other node on the
+mesh learns a position for it and hands it back, so a capture from a *different*
+node uploads it. The reverse holds too: a node is absent from its own nodedb and
+appears only once a neighbour is read. Measured 2026-09-13, both directions in
+one session. The exclusion list is the only gate that survives a change of
+reader, so **read the `HELD BACK` lines every time a new capture source is
+added** — the slice a new source adds is disproportionately your own hardware,
+because your own hardware is what your antennas hear best. This is the one gate that is a privacy decision rather than
 a data-quality one, so it lives in a list you control.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ratatoskr. Meshtastic node DB -> WDGWars, over USB serial.
+"""Ratatoskr. Meshtastic node DB -> WDGWars, over USB serial or TCP.
 
 Sibling to Heimdall (meshcore-to-wdgwars) and Muninn (adsb-to-wdgwars):
 same HMAC envelope, same /api/upload/ endpoint, same mesh payload slot.
@@ -7,12 +7,13 @@ Heimdall fills that slot with `network: "meshcore"`; this fills it with
 `network: "meshtastic"`, which LOCOSP's 2026-08-12 contract made the
 authoritative field rather than having the server guess from role casing.
 
-The serial read and the convert/upload halves are deliberately separate.
-Reading needs the `meshtastic` package and a device on the end of a cable;
+The read and the convert/upload halves are deliberately separate.
+Reading needs the `meshtastic` package and a device on a cable or on wifi;
 everything after that is stdlib and runs against a saved dump, so a capture
 can be re-converted, re-previewed and re-uploaded without the radio present.
 
     ./ratatoskr.py --dump nodes.json          # read the radio, save the dump
+    ./ratatoskr.py --dump roof.json --host IP # ...or one reachable only by wifi
     ./ratatoskr.py nodes.json --preview       # see the records
     ./ratatoskr.py nodes.json --dry-run       # sign, don't POST
     ./ratatoskr.py nodes.json --probe         # POST exactly one record
@@ -24,7 +25,7 @@ import argparse, base64, collections, datetime, hashlib, hmac, json, os
 import pathlib, re, secrets, sys, time
 import urllib.request, urllib.error
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 DEFAULT_ENDPOINT = "https://wdgwars.pl/api/upload/"
 ME_ENDPOINT = "https://wdgwars.pl/api/me"
@@ -67,7 +68,7 @@ DEFAULT_ROLE = "CLIENT"
 # Reading the radio (the only part that needs the meshtastic package)
 # ---------------------------------------------------------------------------
 
-def read_radio(port: str | None) -> dict:
+def read_radio(port: str | None, host: str | None = None) -> dict:
     """Return the radio's node DB as plain JSON-able dicts.
 
     Imported lazily and reported plainly on failure: the convert and upload
@@ -76,6 +77,7 @@ def read_radio(port: str | None) -> dict:
     """
     try:
         from meshtastic.serial_interface import SerialInterface
+        from meshtastic.tcp_interface import TCPInterface
         import meshtastic.util
     except ImportError as e:
         raise SystemExit(
@@ -83,6 +85,29 @@ def read_radio(port: str | None) -> dict:
             f"  python3 -m venv .venv && .venv/bin/pip install meshtastic\n"
             f"Converting and uploading a saved dump needs no packages at all."
         ) from e
+
+    # A node reached over wifi has no serial port at all. The roof repeater is
+    # the case this exists for: it is up a ladder, and its API on :4403 is a
+    # LOCAL connection, so it needs no admin key (remote admin over LoRa does,
+    # and that one is stranded). Try the network before planning a climb.
+    if host:
+        print(f"[..] connecting to {host}", file=sys.stderr)
+        iface = TCPInterface(hostname=host)
+        try:
+            nodes = json.loads(json.dumps(iface.nodes, default=str))
+            my = json.loads(json.dumps(getattr(iface, "myInfo", None), default=str))
+        finally:
+            # The node drops the socket as it is told to disconnect, so close()
+            # raises BrokenPipeError AFTER the nodedb is already in hand. It is
+            # noise on the way out, not a failed read, and a traceback here
+            # reads as one.
+            try:
+                iface.close()
+            except OSError:
+                pass
+        print(f"[OK] read {len(nodes)} nodes from {host}", file=sys.stderr)
+        return {"captured_at": int(time.time()), "source": "tcp", "host": host,
+                "roles_available": True, "my_info": my, "nodes": nodes}
 
     if not port:
         # nab9 pins the board to /dev/meshtastic with a udev rule precisely
@@ -435,8 +460,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="saved node-DB dump(s) to convert. Give more than "
                         "one to merge them, see merge_records()")
     p.add_argument("--dump", dest="dump_out", metavar="FILE",
-                   help="read the radio over USB serial and save to FILE")
+                   help="read the radio and save to FILE (USB serial, "
+                        "or TCP with --host)")
     p.add_argument("--port", help="serial port (auto-detected when omitted)")
+    p.add_argument("--host", metavar="ADDR",
+                   help="read the radio over TCP :4403 instead of USB serial, "
+                        "for a node reachable only over wifi")
     p.add_argument("--preview", action="store_true",
                    help="print the converted records and exit")
     p.add_argument("--dry-run", action="store_true",
@@ -481,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if status == 200 else 1
 
     if args.dump_out:
-        dump = read_radio(args.port)
+        dump = read_radio(args.port, args.host)
         pathlib.Path(args.dump_out).write_text(json.dumps(dump, indent=1))
         print(f"[OK] wrote {args.dump_out} ({len(dump['nodes'])} nodes)")
         # Dumping is not uploading. Stop here unless the caller also asked
