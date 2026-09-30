@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Ratatoskr upload to WDGWars
+
+[Timer]
+# 04:30, half an hour after the ADS-B recorder's 04:00 upload. That is host
+# time: on a UTC host, name the zone after the time (04:30:00 <zone>).
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

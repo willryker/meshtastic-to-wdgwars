@@ -1,0 +1,4 @@
+.env
+own-nodes.txt
+*.json
+*.pre*

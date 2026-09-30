@@ -1,0 +1,12 @@
+[Unit]
+Description=Ratatoskr: upload meshchat's Meshtastic nodes to WDGWars
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=willryker
+Group=willryker
+# Per-tool key (not Joe's main one), 0600 willryker. Read by systemd as root.
+EnvironmentFile=/opt/stacks/ratatoskr/.env
+ExecStart=/usr/bin/python3 /opt/stacks/ratatoskr/run.py
