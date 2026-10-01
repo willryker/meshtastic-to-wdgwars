@@ -392,14 +392,27 @@ def _num_or_none(value):
 # Envelope + transport
 # ---------------------------------------------------------------------------
 
-def load_key(cli_key: str | None) -> str:
-    """--key, then $WDGWARS_API_KEY, then the shared key file on this Mac."""
+def load_key(cli_key: str | None, for_upload: bool = True) -> str:
+    """--key, then $WDGWARS_API_KEY; the Mac's shared key file only for reads.
+
+    Every Meshtastic upload goes out under ONE key, the feed's own
+    (`M7 Meshtastic`, held in /opt/stacks/ratatoskr/.env on nab9), so the
+    WDGWars parser log shows one source and one revoke stops the feed. The
+    shared file on this Mac is the main account key (`beta test` in the
+    parser log): fine for --whoami, refused for anything that POSTs.
+    """
     if cli_key:
         return cli_key.strip()
     env = os.environ.get("WDGWARS_API_KEY")
     if env:
         return env.strip()
     path = pathlib.Path.home() / ".wdgwars" / "api_key"
+    if for_upload:
+        raise SystemExit(
+            "no Ratatoskr key. Meshtastic uploads use the feed's own key on "
+            "nab9, so run them there: ssh nab9 sudo systemctl start "
+            f"ratatoskr.service. ({path} is the main account key and is not "
+            "used for uploads.)")
     if path.is_file():
         return path.read_text().strip()
     raise SystemExit(
@@ -509,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if args.whoami:
-        status, text = _request(ME_ENDPOINT, load_key(args.key))
+        status, text = _request(ME_ENDPOINT, load_key(args.key, for_upload=False))
         print(status, text[:400])
         return 0 if status == 200 else 1
 
