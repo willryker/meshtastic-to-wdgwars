@@ -20,8 +20,12 @@ HERE = Path(__file__).resolve().parent
 DUMP = HERE / "last-dump.json"
 
 
-def notify(title, body, priority="default", tags="satellite"):
-    subprocess.run(["/usr/local/bin/lab-notify", title, body, priority, tags])
+def notify(title, body, priority="default", tags="satellite", channel=None):
+    # channel=None is the main lab channel. Only good news is routed elsewhere:
+    # lab-notify never falls back between channels, so a broken per-channel
+    # webhook must not be able to swallow a failure alert.
+    opt = [f"--channel={channel}"] if channel else []
+    subprocess.run(["/usr/local/bin/lab-notify", *opt, title, body, priority, tags])
 
 
 def counts(obj, found):
@@ -53,7 +57,10 @@ def main():
                "high", "warning")
         return 1
 
-    r = subprocess.run([sys.executable, str(HERE / "ratatoskr.py"), str(DUMP)],
+    # --allow-no-rf: MQTT-sourced nodes are uploaded too, by Joe's decision
+    # 2026-10-01 (see meshtastic.md). Drop the flag to go back to antenna-only.
+    r = subprocess.run([sys.executable, str(HERE / "ratatoskr.py"),
+                        "--allow-no-rf", str(DUMP)],
                        capture_output=True, text=True)
     print(r.stdout + r.stderr)
     lines = r.stdout.splitlines()
@@ -84,7 +91,7 @@ def main():
     if found["imported"]:
         notify(f"Ratatoskr: +{found['imported']} mesh nodes",
                f"{found['imported']} new on WDGWars, {found.get('already_seen', 0)} already there, "
-               f"{sent} sent.")
+               f"{sent} sent.", channel="meshnetwork-node")
     return 0
 
 
